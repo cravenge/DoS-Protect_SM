@@ -1,164 +1,251 @@
-#include <sourcemod_version.h>
+/**
+ * vim: set ts=4 :
+ * =============================================================================
+ * DoS Protect Extension
+ * Copyright (C) 2009 raydan
+ * =============================================================================
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License, version 3.0, as published by the
+ * Free Software Foundation.
+ * 
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * As a special exception, AlliedModders LLC gives you permission to link the
+ * code of this program (as well as its derivative works) to "Half-Life 2," the
+ * "Source Engine," the "SourcePawn JIT," and any Game MODs that run on software
+ * by the Valve Corporation.  You must obey the GNU General Public License in
+ * all respects for all other code used.  Additionally, AlliedModders LLC grants
+ * this exception to all derivative works.  AlliedModders LLC defines further
+ * exceptions, found in LICENSE.txt (as of this writing, version JULY-31-2007),
+ * or <http://www.sourcemod.net/license.php>.
+ *
+ * Version: $Id$
+ */
+
 #include "extension.h"
 
-#ifdef _WIN32
-SH_DECL_MANUALHOOK6(Hook_RecvFrom, 0, 0, 0, int, int, char*, int, int, sockaddr*, int*)
-#elif _LINUX
-SH_DECL_MANUALHOOK6(Hook_RecvFrom, 0, 0, 0, int, int, char*, int, int, sockaddr*, socklen_t*)
+#if SH_SYS != SH_SYS_WIN32            \
+    || (SOURCE_ENGINE != SE_LEFT4DEAD       \
+    && SOURCE_ENGINE != SE_NUCLEARDAWN       \
+    && SOURCE_ENGINE != SE_LEFT4DEAD2       \
+    && SOURCE_ENGINE != SE_CSGO)
+#include "CDetour/detours.h"
 #endif
 
-void * g_pSteamSocketMgr = NULL;
-IGameConfig *g_pGameConf = NULL;
-ICvar * icvar = NULL;
-ICvar * g_pCvar = NULL;
-
-typedef struct Attacker{
-	in_addr ip;
-	int count;
-	time_t time;
-} Attacker;
-
-#if defined _LINUX
-	CDetour *g_pRecvFrom = 0;
+#if SH_SYS == SH_SYS_WIN32            \
+    && (SOURCE_ENGINE == SE_LEFT4DEAD       \
+    || SOURCE_ENGINE == SE_NUCLEARDAWN       \
+    || SOURCE_ENGINE == SE_LEFT4DEAD2       \
+    || SOURCE_ENGINE == SE_CSGO)
+SH_DECL_MANUALHOOK6(Hook_RecvFrom, 0, 0, 0, int, int, char *, int, int, sockaddr *, int *)
 #endif
-
-SourceHook::List<Attacker *> g_Attackers;
-
-ConCommand *g_Attacks = new ConCommand("dosp_attacks", Command_Attacks, "", 0);
 
 DoSProtect g_DoSProtect;
 SMEXT_LINK(&g_DoSProtect);
 
-void Command_Attacks()
+ICvar *icvar = nullptr;
+
+#if SH_SYS == SH_SYS_WIN32            \
+    && (SOURCE_ENGINE == SE_LEFT4DEAD       \
+    || SOURCE_ENGINE == SE_NUCLEARDAWN       \
+    || SOURCE_ENGINE == SE_LEFT4DEAD2       \
+    || SOURCE_ENGINE == SE_CSGO)
+void *g_pSteamSocketMgr = nullptr;
+#else
+CDetour *g_RecvFromDetour = nullptr;
+#endif
+
+SourceHook::List<DoS_Attacks *> g_DoS_Attacks_List;
+
+void OnAttacksCmd()
 {
-	Msg("DoSProtect logged attacks:\n");
-	Msg(" Attacker IP\tPackets\tLast packet\n--------------------------------\n");
-	SourceHook::List<Attacker *>::iterator iter;
-	Attacker *atkr;
-	char szTime[64];
-	for(iter=g_Attackers.begin(); iter!=g_Attackers.end(); iter++)
-	{
-		atkr = (*iter);
-		strftime(szTime, sizeof(szTime), "%Y.%m.%d %H:%M:%S", localtime(&atkr->time));
-		Msg(" %s\t%d\t%s\n",inet_ntoa(atkr->ip),atkr->count,szTime);
-	}
-	Msg("--------------------------------\n");
+    SourceHook::List<DoS_Attacks *>::iterator iter = g_DoS_Attacks_List.begin();
+
+    DoS_Attacks *atkr;
+    char szTime[32];
+
+    Msg("List of recorded DoS attacks:\n");
+    Msg("================================================================================\n");
+
+    while (iter != g_DoS_Attacks_List.end())
+    {
+        atkr = (*iter);
+
+        strftime(szTime, sizeof(szTime), "%m/%d/%Y - %H:%M:%S", localtime(&atkr->time_val));
+
+        Msg("> %s [%d packet(s) ; Last attempt: %s]\n", inet_ntoa(atkr->ipaddr4), atkr->count, szTime);
+
+        iter++;
+    }
+
+    Msg("================================================================================\n");
 }
 
-void LogDoS(in_addr ip)
+ConCommand dosp_attacks("dosp_attacks", OnAttacksCmd, "", 0);
+
+void SaveAttempt(in_addr ipaddr4)
 {
-	SourceHook::List<Attacker *>::iterator iter;
-	Attacker *atkr;
-	for(iter=g_Attackers.begin(); iter!=g_Attackers.end(); iter++)
-	{
-		atkr = (*iter);
-		if(memcmp((void*)&ip, (void*)&atkr->ip, sizeof(in_addr))==0)
-		{
-			++atkr->count;
-			atkr->time=time(0);
-			return;
-		}
-	}
-	atkr = new Attacker;
-	atkr->ip=ip;
-	atkr->count=0;
-	g_Attackers.push_back(atkr);
+    SourceHook::List<DoS_Attacks *>::iterator iter = g_DoS_Attacks_List.begin();
+
+    DoS_Attacks *atkr;
+
+    while (iter != g_DoS_Attacks_List.end())
+    {
+        atkr = (*iter);
+        if (memcmp((void*)&ipaddr4, (void*)&atkr->ipaddr4, sizeof(in_addr)) == 0)
+        {
+            atkr->count++;
+            atkr->time_val = time(nullptr);
+
+            return;
+        }
+
+        iter++;
+    }
+
+    atkr = new DoS_Attacks;
+
+    atkr->ipaddr4 = ipaddr4;
+    atkr->count = 1;
+    atkr->time_val = time(nullptr);
+
+    g_DoS_Attacks_List.push_back(atkr);
 }
 
-#if defined _WIN32
-int Hook_RecvFrom(int s, char * buf, int len, int flags, sockaddr * from, int * fromlen)
+#if SH_SYS != SH_SYS_WIN32            \
+    || (SOURCE_ENGINE != SE_LEFT4DEAD       \
+    && SOURCE_ENGINE != SE_NUCLEARDAWN       \
+    && SOURCE_ENGINE != SE_LEFT4DEAD2       \
+    && SOURCE_ENGINE != SE_CSGO)
+DETOUR_DECL_STATIC6(Detour_RecvFrom, int, int, socket, char *, buffer, int, length, int, flags, sockaddr *, address, socklen_t *, address_len)
 {
-	//Calling SteamSocketMgr::recvfrom resulted in fake and false reports
-	//This seems to work just fine too
-	int ret = recvfrom(s, buf, len, flags, from, fromlen);
-	if(ret==0)
-	{
-		LogDoS(((sockaddr_in*)from)->sin_addr);
-		RETURN_META_VALUE(MRES_SUPERCEDE, 25);
-	}
-	RETURN_META_VALUE(MRES_SUPERCEDE, ret);
+    int ret = DETOUR_STATIC_CALL(Detour_RecvFrom)(socket, buffer, length, flags, address, address_len);
+    if (ret != 0)
+    {
+        return ret;
+    }
+
+    SaveAttempt(((sockaddr_in*)address)->sin_addr);
+    return 25;
 }
-#elif defined _LINUX
-DETOUR_DECL_STATIC6(Detour_RecvFrom, int, int, s, char *, buf, int, len, int, flags, sockaddr *, from, socklen_t*, fromlen)
+#else
+int Hook_RecvFrom(int s, char *buf, int len, int flags, sockaddr *from, int *fromlen)
 {
-	int ret = DETOUR_STATIC_CALL(Detour_RecvFrom)(s, buf, len, flags, from, fromlen);
-	if(ret==0)
-	{
-		LogDoS(((sockaddr_in*)from)->sin_addr);
-		return 25;
-	}
-	return ret;
+    int ret = recvfrom(s, buf, len, flags, from, fromlen);
+    if (ret != 0)
+    {
+        RETURN_META_VALUE(MRES_SUPERCEDE, ret);
+    }
+
+    SaveAttempt(((sockaddr_in*)from)->sin_addr);
+    RETURN_META_VALUE(MRES_SUPERCEDE, 25);
 }
 #endif
 
-bool DoSProtect::SDK_OnLoad(char *error, size_t maxlength, bool late)
+bool DoSProtect::SDK_OnLoad(char *error, size_t maxlen, bool late)
 {
-#if defined _WIN32
-	char conf_error[255];
-	if(!gameconfs->LoadGameConfigFile("dosprotect", &g_pGameConf, conf_error, sizeof(conf_error)))
-	{
-		error = conf_error;
-		return false;
-	}
+#if SH_SYS != SH_SYS_WIN32            \
+    || (SOURCE_ENGINE != SE_LEFT4DEAD       \
+    && SOURCE_ENGINE != SE_NUCLEARDAWN       \
+    && SOURCE_ENGINE != SE_LEFT4DEAD2       \
+    && SOURCE_ENGINE != SE_CSGO)
+    CDetourManager::Init(g_pSM->GetScriptingEngine(), nullptr);
 
-	g_pGameConf->GetAddress("SteamSocketMgr", &g_pSteamSocketMgr);
-	if(!g_pSteamSocketMgr)
-	{
-		sprintf(error, "Failed to get address of SteamSocketMgr");
-		return false;
-	}
+    g_RecvFromDetour = DETOUR_CREATE_STATIC_PTR(Detour_RecvFrom, (gpointer)recvfrom);
+    if (g_RecvFromDetour == nullptr)
+    {
+        ke::SafeStrcpy(error, maxlen, "Failed to setup detour for recvfrom.");
+        return false;
+    }
+    
+    g_RecvFromDetour->EnableDetour();
 
-	int offset;
-	if(!g_pGameConf->GetOffset("recvfrom", &offset))
-	{
-		sprintf(error, "Failed to get recvfrom offset");
-		return false;
-	}
+    rootconsole->ConsolePrint("[DoSP] Detouring recvfrom...");
+#else
+    IGameConfig *g_pGameConf = nullptr;
 
-	SH_MANUALHOOK_RECONFIGURE(Hook_RecvFrom, offset, 0, 0);
-	SH_ADD_MANUALHOOK(Hook_RecvFrom, g_pSteamSocketMgr, SH_STATIC(Hook_RecvFrom), false);
-#elif defined _LINUX
-	CDetourManager::Init(g_pSM->GetScriptingEngine(), 0);
-	g_pRecvFrom = DETOUR_CREATE_STATIC_PTR(Detour_RecvFrom, (gpointer)recvfrom);
-	if (g_pRecvFrom == NULL)
-	{
-		snprintf(error, maxlength, "Failed to initialize the detour. Please contact the author.");
-		return false;
-	}
-	g_pRecvFrom->EnableDetour();
+    char conf_error[255];
+    if (!gameconfs->LoadGameConfigFile("dosprotect.games", &g_pGameConf, conf_error, sizeof(conf_error)))
+    {
+        if (error)
+        {
+            ke::SafeSprintf(error, maxlen, "Could not read dosprotect.games: %s", conf_error);
+        }
+        return false;
+    }
+
+    if (!g_pGameConf->GetAddress("SteamSocketMgr", &g_pSteamSocketMgr) || g_pSteamSocketMgr == nullptr)
+    {
+        ke::SafeStrcpy(error, maxlen, "Failed to find SteamSocketMgr pointer.");
+        return false;
+    }
+
+    int offset;
+    if (!g_pGameConf->GetOffset("CSteamSocketMgr::recvfrom", &offset))
+    {
+        ke::SafeStrcpy(error, maxlen, "Failed to get CSteamSocketMgr::recvfrom offset.");
+        return false;
+    }
+
+    gameconfs->CloseGameConfigFile(g_pGameConf);
+
+    SH_MANUALHOOK_RECONFIGURE(Hook_RecvFrom, offset, 0, 0);
+    
+    SH_ADD_MANUALHOOK(Hook_RecvFrom, g_pSteamSocketMgr, SH_STATIC(Hook_RecvFrom), false);
+
+    rootconsole->ConsolePrint("[DoSP] Hooked CSteamSocketMgr::recvfrom successfully!");
 #endif
 
-	return true;
+#if SOURCE_ENGINE >= SE_ORANGEBOX
+    g_pCVar = icvar;
+
+    ConVar_Register(0, this);
+#else
+    ConCommandBaseMgr::OneTimeInit(this);
+#endif
+    return true;
 }
 
 void DoSProtect::SDK_OnUnload()
 {
-#if defined _WIN32
-	SH_REMOVE_MANUALHOOK(Hook_RecvFrom, g_pSteamSocketMgr, SH_STATIC(Hook_RecvFrom), false);
-#elif defined _LINUX
-	if(g_pRecvFrom)
-		g_pRecvFrom->Destroy();
+    SourceHook::List<DoS_Attacks *>::iterator iter = g_DoS_Attacks_List.end();
+    while (iter != g_DoS_Attacks_List.begin())
+    {
+        delete (*iter);
+        
+        --iter;
+    }
+
+    g_DoS_Attacks_List.clear();
+
+#if SH_SYS != SH_SYS_WIN32            \
+    || (SOURCE_ENGINE != SE_LEFT4DEAD       \
+    && SOURCE_ENGINE != SE_NUCLEARDAWN       \
+    && SOURCE_ENGINE != SE_LEFT4DEAD2       \
+    && SOURCE_ENGINE != SE_CSGO)
+    if (g_RecvFromDetour)
+    {
+        g_RecvFromDetour->Destroy();
+    }
+#else
+    SH_REMOVE_MANUALHOOK(Hook_RecvFrom, g_pSteamSocketMgr, SH_STATIC(Hook_RecvFrom), false);
 #endif
-
-	SourceHook::List<Attacker *>::iterator iter;
-	Attacker *atkr;
-	for(iter=g_Attackers.begin(); iter!=g_Attackers.end(); iter++)
-	{
-		atkr = (*iter);
-		delete atkr;
-	}
-	g_Attackers.clear();
-	g_pCvar->UnregisterConCommand(g_Attacks);
-}
-
-void DoSProtect::SDK_OnAllLoaded()
-{
 }
 
 bool DoSProtect::SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
-	// I gave up figuring out the Metamod way after 10 minutes of trial and failure, this just worked
-	GET_V_IFACE_CURRENT(GetEngineFactory, g_pCvar, ICvar, CVAR_INTERFACE_VERSION);
-	g_pCvar->RegisterConCommand(g_Attacks);
-	return true;
+    GET_V_IFACE_CURRENT(GetEngineFactory, icvar, ICvar, CVAR_INTERFACE_VERSION);
+    return true;
+}
+
+bool DoSProtect::RegisterConCommandBase(ConCommandBase *pCommand)
+{
+    return META_REGCVAR(pCommand);
 }

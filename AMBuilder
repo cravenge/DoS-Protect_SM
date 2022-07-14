@@ -1,0 +1,46 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+import os
+
+project = builder.LibraryProject('dosprotect.ext')
+project.sources += [
+  'extension.cpp',
+  'smsdk_ext.cpp',
+  os.path.join('CDetour', 'detours.cpp'),
+  os.path.join(DoSP.sm_root, 'public', 'asm', 'asm.c'),
+]
+
+libudis_folder = os.path.join(DoSP.sm_root, 'public', 'libudis86')
+if os.path.isdir(libudis_folder):
+  project.sources += [
+    os.path.join(libudis_folder, 'decode.c'),
+    os.path.join(libudis_folder, 'itab.c'),
+    os.path.join(libudis_folder, 'syn-att.c'),
+    os.path.join(libudis_folder, 'syn-intel.c'),
+    os.path.join(libudis_folder, 'syn.c'),
+    os.path.join(libudis_folder, 'udis86.c'),
+  ]
+
+for sdk_name in DoSP.sdks:
+  sdk = DoSP.sdks[sdk_name]
+  if sdk.name == 'mock':
+    continue
+
+  for cxx in builder.targets:
+    if not cxx.target.arch in sdk.platformSpec[cxx.target.platform]:
+      continue
+
+    binary = DoSP.HL2ExtConfig(project, builder, cxx, 'dosprotect.ext.' + sdk.ext, sdk)
+    if binary.compiler.behavior == 'gcc':
+      binary.compiler.cflags += ['-Wno-invalid-offsetof']
+    elif binary.compiler.like('msvc'):
+      binary.compiler.linkflags += ['ws2_32.lib']
+
+    binary.compiler.cxxincludes += [
+      os.path.join(DoSP.sm_root, 'public', 'jit'),
+      os.path.join(DoSP.sm_root, 'public', 'jit', 'x86'),
+    ]
+
+    if os.path.isdir(libudis_folder):
+      binary.compiler.defines += ['HAVE_STRING_H']
+
+DoSP.extensions += builder.Add(project)

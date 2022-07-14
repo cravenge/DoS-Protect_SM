@@ -1,5 +1,5 @@
 /**
- * vim: set ts=4 :
+ * vim: set ts=4 sw=4 tw=99 noet:
  * =============================================================================
  * SourceMod Base Extension Code
  * Copyright (C) 2004-2008 AlliedModders LLC.  All rights reserved.
@@ -31,71 +31,77 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+
 #include "smsdk_ext.h"
+
+#include <amtl/am-string.h>
 
 /**
  * @file smsdk_ext.cpp
  * @brief Contains wrappers for making Extensions easier to write.
  */
 
-IExtension *myself = NULL;				/**< Ourself */
-IShareSys *g_pShareSys = NULL;			/**< Share system */
-IShareSys *sharesys = NULL;				/**< Share system */
-ISourceMod *g_pSM = NULL;				/**< SourceMod helpers */
-ISourceMod *smutils = NULL;				/**< SourceMod helpers */
+IExtension *myself = nullptr;				/**< Ourself */
+IShareSys *g_pShareSys = nullptr;			/**< Share system */
+IShareSys *sharesys = nullptr;				/**< Share system */
+ISourceMod *g_pSM = nullptr;				/**< SourceMod helpers */
+ISourceMod *smutils = nullptr;				/**< SourceMod helpers */
 
-#if defined SMEXT_ENABLE_FORWARDSYS
-IForwardManager *g_pForwards = NULL;	/**< Forward system */
-IForwardManager *forwards = NULL;		/**< Forward system */
+#ifdef SMEXT_ENABLE_FORWARDSYS
+IForwardManager *g_pForwards = nullptr;	/**< Forward system */
+IForwardManager *forwards = nullptr;		/**< Forward system */
 #endif
-#if defined SMEXT_ENABLE_HANDLESYS
-IHandleSys *g_pHandleSys = NULL;		/**< Handle system */
-IHandleSys *handlesys = NULL;			/**< Handle system */
+#ifdef SMEXT_ENABLE_HANDLESYS
+IHandleSys *g_pHandleSys = nullptr;		/**< Handle system */
+IHandleSys *handlesys = nullptr;			/**< Handle system */
 #endif
-#if defined SMEXT_ENABLE_PLAYERHELPERS
-IPlayerManager *playerhelpers = NULL;	/**< Player helpers */
+#ifdef SMEXT_ENABLE_PLAYERHELPERS
+IPlayerManager *playerhelpers = nullptr;	/**< Player helpers */
 #endif //SMEXT_ENABLE_PLAYERHELPERS
-#if defined SMEXT_ENABLE_DBMANAGER
-IDBManager *dbi = NULL;					/**< DB Manager */
+#ifdef SMEXT_ENABLE_DBMANAGER
+IDBManager *dbi = nullptr;					/**< DB Manager */
 #endif //SMEXT_ENABLE_DBMANAGER
-#if defined SMEXT_ENABLE_GAMECONF
-IGameConfigManager *gameconfs = NULL;	/**< Game config manager */
+#ifdef SMEXT_ENABLE_GAMECONF
+IGameConfigManager *gameconfs = nullptr;	/**< Game config manager */
 #endif //SMEXT_ENABLE_DBMANAGER
-#if defined SMEXT_ENABLE_MEMUTILS
-IMemoryUtils *memutils = NULL;
+#ifdef SMEXT_ENABLE_MEMUTILS
+IMemoryUtils *memutils = nullptr;
 #endif //SMEXT_ENABLE_DBMANAGER
-#if defined SMEXT_ENABLE_GAMEHELPERS
-IGameHelpers *gamehelpers = NULL;
+#ifdef SMEXT_ENABLE_GAMEHELPERS
+IGameHelpers *gamehelpers = nullptr;
 #endif
-#if defined SMEXT_ENABLE_TIMERSYS
-ITimerSystem *timersys = NULL;
+#ifdef SMEXT_ENABLE_TIMERSYS
+ITimerSystem *timersys = nullptr;
 #endif
-#if defined SMEXT_ENABLE_ADTFACTORY
-IADTFactory *adtfactory = NULL;
+#ifdef SMEXT_ENABLE_ADTFACTORY
+IADTFactory *adtfactory = nullptr;
 #endif
-#if defined SMEXT_ENABLE_THREADER
-IThreader *threader = NULL;
+#ifdef SMEXT_ENABLE_THREADER
+IThreader *threader = nullptr;
 #endif
-#if defined SMEXT_ENABLE_LIBSYS
-ILibrarySys *libsys = NULL;
+#ifdef SMEXT_ENABLE_LIBSYS
+ILibrarySys *libsys = nullptr;
 #endif
-#if defined SMEXT_ENABLE_PLUGINSYS
+#ifdef SMEXT_ENABLE_PLUGINSYS
 SourceMod::IPluginManager *plsys;
 #endif
-#if defined SMEXT_ENABLE_MENUS
-IMenuManager *menus = NULL;
+#ifdef SMEXT_ENABLE_MENUS
+IMenuManager *menus = nullptr;
 #endif
-#if defined SMEXT_ENABLE_ADMINSYS
-IAdminSystem *adminsys = NULL;
+#ifdef SMEXT_ENABLE_ADMINSYS
+IAdminSystem *adminsys = nullptr;
 #endif
-#if defined SMEXT_ENABLE_TEXTPARSERS
-ITextParsers *textparsers = NULL;
+#ifdef SMEXT_ENABLE_TEXTPARSERS
+ITextParsers *textparsers = nullptr;
 #endif
-#if defined SMEXT_ENABLE_USERMSGS
-IUserMessages *usermsgs = NULL;
+#ifdef SMEXT_ENABLE_USERMSGS
+IUserMessages *usermsgs = nullptr;
 #endif
-#if defined SMEXT_ENABLE_TRANSLATOR
-ITranslator *translator = NULL;
+#ifdef SMEXT_ENABLE_TRANSLATOR
+ITranslator *translator = nullptr;
+#endif
+#ifdef SMEXT_ENABLE_ROOTCONSOLEMENU
+IRootConsole *rootconsole = nullptr;
 #endif
 
 /** Exports the main interface */
@@ -106,7 +112,7 @@ PLATFORM_EXTERN_C IExtensionInterface *GetSMExtAPI()
 
 SDKExtension::SDKExtension()
 {
-#if defined SMEXT_CONF_METAMOD
+#ifdef SMEXT_CONF_METAMOD
 	m_SourceMMLoaded = false;
 	m_WeAreUnloaded = false;
 	m_WeGotPauseChange = false;
@@ -118,77 +124,80 @@ bool SDKExtension::OnExtensionLoad(IExtension *me, IShareSys *sys, char *error, 
 	g_pShareSys = sharesys = sys;
 	myself = me;
 
-#if defined SMEXT_CONF_METAMOD
+#ifdef SMEXT_CONF_METAMOD
 	m_WeAreUnloaded = true;
 
 	if (!m_SourceMMLoaded)
 	{
 		if (error)
 		{
-			snprintf(error, maxlength, "Metamod attach failed");
+			ke::SafeStrcpy(error, maxlength, "Metamod attach failed");
 		}
 		return false;
 	}
 #endif
 	SM_GET_IFACE(SOURCEMOD, g_pSM);
 	smutils = g_pSM;
-#if defined SMEXT_ENABLE_HANDLESYS
+#ifdef SMEXT_ENABLE_HANDLESYS
 	SM_GET_IFACE(HANDLESYSTEM, g_pHandleSys);
 	handlesys = g_pHandleSys;
 #endif
-#if defined SMEXT_ENABLE_FORWARDSYS
+#ifdef SMEXT_ENABLE_FORWARDSYS
 	SM_GET_IFACE(FORWARDMANAGER, g_pForwards);
 	forwards = g_pForwards;
 #endif
-#if defined SMEXT_ENABLE_PLAYERHELPERS
+#ifdef SMEXT_ENABLE_PLAYERHELPERS
 	SM_GET_IFACE(PLAYERMANAGER, playerhelpers);
 #endif
-#if defined SMEXT_ENABLE_DBMANAGER
+#ifdef SMEXT_ENABLE_DBMANAGER
 	SM_GET_IFACE(DBI, dbi);
 #endif
-#if defined SMEXT_ENABLE_GAMECONF
+#ifdef SMEXT_ENABLE_GAMECONF
 	SM_GET_IFACE(GAMECONFIG, gameconfs);
 #endif
-#if defined SMEXT_ENABLE_MEMUTILS
+#ifdef SMEXT_ENABLE_MEMUTILS
 	SM_GET_IFACE(MEMORYUTILS, memutils);
 #endif
-#if defined SMEXT_ENABLE_GAMEHELPERS
+#ifdef SMEXT_ENABLE_GAMEHELPERS
 	SM_GET_IFACE(GAMEHELPERS, gamehelpers);
 #endif
-#if defined SMEXT_ENABLE_TIMERSYS
+#ifdef SMEXT_ENABLE_TIMERSYS
 	SM_GET_IFACE(TIMERSYS, timersys);
 #endif
-#if defined SMEXT_ENABLE_ADTFACTORY
+#ifdef SMEXT_ENABLE_ADTFACTORY
 	SM_GET_IFACE(ADTFACTORY, adtfactory);
 #endif
-#if defined SMEXT_ENABLE_THREADER
+#ifdef SMEXT_ENABLE_THREADER
 	SM_GET_IFACE(THREADER, threader);
 #endif
-#if defined SMEXT_ENABLE_LIBSYS
+#ifdef SMEXT_ENABLE_LIBSYS
 	SM_GET_IFACE(LIBRARYSYS, libsys);
 #endif
-#if defined SMEXT_ENABLE_PLUGINSYS
+#ifdef SMEXT_ENABLE_PLUGINSYS
 	SM_GET_IFACE(PLUGINSYSTEM, plsys);
 #endif
-#if defined SMEXT_ENABLE_MENUS
+#ifdef SMEXT_ENABLE_MENUS
 	SM_GET_IFACE(MENUMANAGER, menus);
 #endif
-#if defined SMEXT_ENABLE_ADMINSYS
+#ifdef SMEXT_ENABLE_ADMINSYS
 	SM_GET_IFACE(ADMINSYS, adminsys);
 #endif
-#if defined SMEXT_ENABLE_TEXTPARSERS
+#ifdef SMEXT_ENABLE_TEXTPARSERS
 	SM_GET_IFACE(TEXTPARSERS, textparsers);
 #endif
-#if defined SMEXT_ENABLE_USERMSGS
+#ifdef SMEXT_ENABLE_USERMSGS
 	SM_GET_IFACE(USERMSGS, usermsgs);
 #endif
-#if defined SMEXT_ENABLE_TRANSLATOR
+#ifdef SMEXT_ENABLE_TRANSLATOR
 	SM_GET_IFACE(TRANSLATOR, translator);
+#endif
+#ifdef SMEXT_ENABLE_ROOTCONSOLEMENU
+	SM_GET_IFACE(ROOTCONSOLE, rootconsole);
 #endif
 
 	if (SDK_OnLoad(error, maxlength, late))
 	{
-#if defined SMEXT_CONF_METAMOD
+#ifdef SMEXT_CONF_METAMOD
 		m_WeAreUnloaded = true;
 #endif
 		return true;
@@ -199,7 +208,7 @@ bool SDKExtension::OnExtensionLoad(IExtension *me, IShareSys *sys, char *error, 
 
 bool SDKExtension::IsMetamodExtension()
 {
-#if defined SMEXT_CONF_METAMOD
+#ifdef SMEXT_CONF_METAMOD
 	return true;
 #else
 	return false;
@@ -208,7 +217,7 @@ bool SDKExtension::IsMetamodExtension()
 
 void SDKExtension::OnExtensionPauseChange(bool state)
 {
-#if defined SMEXT_CONF_METAMOD
+#ifdef SMEXT_CONF_METAMOD
 	m_WeGotPauseChange = true;
 #endif
 	SDK_OnPauseChange(state);
@@ -221,10 +230,15 @@ void SDKExtension::OnExtensionsAllLoaded()
 
 void SDKExtension::OnExtensionUnload()
 {
-#if defined SMEXT_CONF_METAMOD
+#ifdef SMEXT_CONF_METAMOD
 	m_WeAreUnloaded = true;
 #endif
 	SDK_OnUnload();
+}
+
+void SDKExtension::OnDependenciesDropped()
+{
+	SDK_OnDependenciesDropped();
 }
 
 const char *SDKExtension::GetExtensionAuthor()
@@ -279,20 +293,25 @@ void SDKExtension::SDK_OnAllLoaded()
 {
 }
 
-#if defined SMEXT_CONF_METAMOD
+void SDKExtension::SDK_OnDependenciesDropped()
+{
+}
 
+#ifdef SMEXT_CONF_METAMOD
 PluginId g_PLID = 0;						/**< Metamod plugin ID */
-ISmmPlugin *g_PLAPI = NULL;					/**< Metamod plugin API */
-SourceHook::ISourceHook *g_SHPtr = NULL;	/**< SourceHook pointer */
-ISmmAPI *g_SMAPI = NULL;					/**< SourceMM API pointer */
+ISmmPlugin *g_PLAPI = nullptr;					/**< Metamod plugin API */
+SourceHook::ISourceHook *g_SHPtr = nullptr;	/**< SourceHook pointer */
+ISmmAPI *g_SMAPI = nullptr;					/**< SourceMM API pointer */
 
-IVEngineServer *engine = NULL;				/**< IVEngineServer pointer */
-IServerGameDLL *gamedll = NULL;				/**< IServerGameDLL pointer */
+#ifndef META_NO_HL2SDK
+IVEngineServer *engine = nullptr;				/**< IVEngineServer pointer */
+IServerGameDLL *gamedll = nullptr;				/**< IServerGameDLL pointer */
+#endif
 
 /** Exposes the extension to Metamod */
 SMM_API void *PL_EXPOSURE(const char *name, int *code)
 {
-#if defined METAMOD_PLAPI_VERSION
+#ifdef METAMOD_PLAPI_VERSION
 	if (name && !strcmp(name, METAMOD_PLAPI_NAME))
 #else
 	if (name && !strcmp(name, PLAPI_NAME))
@@ -300,30 +319,53 @@ SMM_API void *PL_EXPOSURE(const char *name, int *code)
 	{
 		if (code)
 		{
-			*code = IFACE_OK;
+			*code = META_IFACE_OK;
 		}
 		return static_cast<void *>(g_pExtensionIface);
 	}
 
 	if (code)
 	{
-		*code = IFACE_FAILED;
+		*code = META_IFACE_FAILED;
 	}
 
-	return NULL;
+	return nullptr;
 }
 
 bool SDKExtension::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
 	PLUGIN_SAVEVARS();
 
+#ifndef META_NO_HL2SDK
 #if !defined METAMOD_PLAPI_VERSION
 	GET_V_IFACE_ANY(serverFactory, gamedll, IServerGameDLL, INTERFACEVERSION_SERVERGAMEDLL);
 	GET_V_IFACE_CURRENT(engineFactory, engine, IVEngineServer, INTERFACEVERSION_VENGINESERVER);
 #else
 	GET_V_IFACE_ANY(GetServerFactory, gamedll, IServerGameDLL, INTERFACEVERSION_SERVERGAMEDLL);
+#if SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_SDK2013
+	// Shim to avoid hooking shims
+	engine = (IVEngineServer *) ismm->GetEngineFactory()("VEngineServer023", nullptr);
+	if (!engine)
+	{
+		engine = (IVEngineServer *) ismm->GetEngineFactory()("VEngineServer022", nullptr);
+		if (!engine)
+		{
+			engine = (IVEngineServer *) ismm->GetEngineFactory()("VEngineServer021", nullptr);
+			if (!engine)
+			{
+				if (error && maxlen)
+				{
+					ismm->Format(error, maxlen, "Could not find interface: VEngineServer023 or VEngineServer022");
+				}
+				return false;
+			}
+		}
+	}
+#else
 	GET_V_IFACE_CURRENT(GetEngineFactory, engine, IVEngineServer, INTERFACEVERSION_VENGINESERVER);
-#endif
+#endif // TF2 / CSS / DODS / HL2DM / SDK2013
+#endif // !METAMOD_PLAPI_VERSION
+#endif //META_NO_HL2SDK
 
 	m_SourceMMLoaded = true;
 
@@ -336,7 +378,7 @@ bool SDKExtension::Unload(char *error, size_t maxlen)
 	{
 		if (error)
 		{
-			snprintf(error, maxlen, "This extension must be unloaded by SourceMod.");
+			ke::SafeStrcpy(error, maxlen, "This extension must be unloaded by SourceMod.");
 		}
 		return false;
 	}
@@ -350,7 +392,7 @@ bool SDKExtension::Pause(char *error, size_t maxlen)
 	{
 		if (error)
 		{
-			snprintf(error, maxlen, "This extension must be paused by SourceMod.");
+			ke::SafeStrcpy(error, maxlen, "This extension must be paused by SourceMod.");
 		}
 		return false;
 	}
@@ -366,7 +408,7 @@ bool SDKExtension::Unpause(char *error, size_t maxlen)
 	{
 		if (error)
 		{
-			snprintf(error, maxlen, "This extension must be unpaused by SourceMod.");
+			ke::SafeStrcpy(error, maxlen, "This extension must be unpaused by SourceMod.");
 		}
 		return false;
 	}
@@ -459,4 +501,3 @@ void operator delete[](void * ptr)
 	free(ptr);
 }
 #endif
-

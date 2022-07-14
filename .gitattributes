@@ -1,0 +1,2 @@
+# GitHub views all .h files as C, let's assume it's C++
+*.h linguist-language=c++
