@@ -29,15 +29,24 @@ class SDK(object):
 WinOnly = ['windows']
 WinLinux = ['windows', 'linux']
 WinLinuxMac = ['windows', 'linux', 'mac']
+CSGO = {
+  'windows': ['x86'],
+  'linux': ['x86', 'x86_64'],
+  'mac': ['x86_64']
+}
+Source2 = {
+  'windows': ['x86', 'x86_64'],
+  'linux': ['x86_64'],
+}
 Blade = {
   'windows': ['x86', 'x86_64'],
   'linux': ['x86_64'],
   'mac': ['x86_64']
 }
-CSGO = {
-  'windows': ['x86'],
-  'linux': ['x86', 'x86_64'],
-  'mac': ['x86_64']
+Insurgency = {
+  'windows': ['x86', 'x86_64'],
+  'linux': ['x86'],
+  'mac': ['x86', 'x86_64'],
 }
 Mock = {
   'windows': ['x86', 'x86_64'],
@@ -61,6 +70,7 @@ SDKMap = {
   'bgt':  SDK('HL2SDK-BGT', '2.bgt', '4', 'BLOODYGOODTIME', WinOnly, 'bgt'),
   'eye':  SDK('HL2SDK-EYE', '2.eye', '5', 'EYE', WinOnly, 'eye'),
   'csgo': SDK('HL2SDKCSGO', '2.csgo', '21', 'CSGO', CSGO, 'csgo'),
+  'dota': SDK('HL2SDKDOTA', '2.dota', '22', 'DOTA', [], 'dota'),
   'portal2':  SDK('HL2SDKPORTAL2', '2.portal2', '17', 'PORTAL2', [], 'portal2'),
   'blade':  SDK('HL2SDKBLADE', '2.blade', '18', 'BLADE', Blade, 'blade'),
   'insurgency':  SDK('HL2SDKINSURGENCY', '2.insurgency', '19', 'INSURGENCY', WinLinuxMac, 'insurgency'),
@@ -312,6 +322,9 @@ class DoSPConfig(object):
 
     if builder.options.opt == '1':
         cxx.cflags += ['-O3']
+
+    if builder.options.debug == '1':
+      cxx.cflags += ['-g3', '-ggdb3']
 
     cxx.cflags += ['-fno-omit-frame-pointer']
 
